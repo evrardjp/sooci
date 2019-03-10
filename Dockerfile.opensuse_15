@@ -1,0 +1,120 @@
+## Build requirements pkg list
+ARG FROM=opensuse/leap:15
+FROM ${FROM} as requirementsbindepbuilder
+
+ARG BINDEP_LOCATION=https://opendev.org/openstack/loci/raw/branch/master/bindep.txt
+ARG PYDEP_LOCATION=https://opendev.org/openstack/loci/raw/branch/master/pydep.txt
+
+WORKDIR /bindeps/
+
+RUN zypper ar https://download.opensuse.org/repositories/devel:/languages:/python:/backports/openSUSE_Leap_15.0/devel:languages:python:backports.repo && zypper --gpg-auto-import-keys refresh
+RUN zypper install --no-confirm --auto-agree-with-licenses --force-resolution --no-recommends python3-bindep lsb-release
+
+ADD ${BINDEP_LOCATION} bindep.txt
+ADD ${PYDEP_LOCATION} pydep.txt
+RUN bindep -l csv requirements python3 | sed 's/,/ /g' > distropkglist
+
+## Build requirements
+FROM ${FROM} as requirementsbuilder
+
+ARG PROJECT_REF=master
+ARG REQUIREMENTS_PROJECT_REF=$PROJECT_REF
+ARG UPPERCONSTRAINTS_URL=https://raw.githubusercontent.com/openstack/requirements/${REQUIREMENTS_PROJECT_REF}/upper-constraints.txt
+ARG PIP_WHEEL_ARGS=""
+LABEL org.openstack.projectname="requirements"
+LABEL org.openstack.reference="${REQUIREMENTS_PROJECT_REF}"
+
+WORKDIR /wheels/
+
+COPY --from=requirementsbindepbuilder /bindeps/distropkglist /distropkglist
+COPY pip-package-blacklist.txt pip-package-extralist.txt /wheels/
+ADD ${UPPERCONSTRAINTS_URL} /wheels/upper-constraints.txt
+
+RUN zypper install \
+    --no-confirm \
+    --auto-agree-with-licenses \
+    --force-resolution \
+    --no-recommends \
+    gnu_parallel \
+    python3-devel \
+    python3-setuptools \
+    python3-wheel \
+    python3-pip \
+    $(cat /distropkglist); \
+    rm -f /distropkglist
+
+RUN cat upper-constraints.txt pip-package-extralist.txt | grep -v -f pip-package-blacklist.txt > wheel-build-list.txt
+RUN cat wheel-build-list.txt | parallel "pip wheel --no-deps ${PIP_WHEEL_ARGS}"
+
+## Build project pkg list
+# keep same order as possible from requirementsbindepbuilder
+ARG FROM=opensuse/leap:15
+FROM ${FROM} as projectbindepbuilder
+
+ARG PROJECT
+ARG PROFILES
+
+WORKDIR /bindeps/
+
+RUN zypper ar https://download.opensuse.org/repositories/devel:/languages:/python:/backports/openSUSE_Leap_15.0/devel:languages:python:backports.repo && zypper --gpg-auto-import-keys refresh
+RUN zypper install --no-confirm --auto-agree-with-licenses --force-resolution --no-recommends python3-bindep lsb-release
+
+COPY --from=requirementsbindepbuilder /bindeps/bindep.txt /bindeps/bindep.txt
+COPY --from=requirementsbindepbuilder /bindeps/pydep.txt /bindeps/pydep.txt
+
+RUN bindep -l csv ${PROJECT} ${PROFILES} python3 | sed 's/,/ /g' > distropkglist.txt
+RUN bindep -f pydep.txt -l newline ${PROJECT} ${PROFILES} python3 > pypkglist.txt
+
+## Build project
+ARG FROM=opensuse/leap:15
+FROM ${FROM} as projectimage
+
+ENV PATH=/var/lib/openstack/bin:$PATH
+ARG PROJECT
+ARG PROFILES
+ARG PROJECT_REPO="https://opendev.org/openstack/${PROJECT}.git"
+ARG PROJECT_REF="master"
+ARG PIP_ARGS=""
+ARG PIP_EXTRA_PACKAGES=""
+ARG RPM_EXTRA_PACKAGES=""
+ARG UID=42424
+ARG GID=42424
+LABEL org.openstack.projectname="${PROJECT}"
+LABEL org.openstack.reference="${PROJECT_REF}"
+
+WORKDIR /tmp/$PROJECT
+
+COPY --from=projectbindepbuilder /bindeps/distropkglist.txt distropkglist.txt
+COPY --from=projectbindepbuilder /bindeps/pypkglist.txt pypkglist.txt
+COPY --from=requirementsbuilder /wheels/ /wheels/
+
+RUN zypper install \
+    --no-confirm \
+    --auto-agree-with-licenses \
+    --force-resolution \
+    --no-recommends \
+    git python3-virtualenv python3-setuptools python3-pip python3-wheel \
+    $(cat /tmp/${PROJECT}/distropkglist.txt) \
+    ${RPM_EXTRA_PACKAGES}
+
+RUN groupadd -g ${GID} ${PROJECT}; \
+    useradd -u ${UID} -g ${PROJECT} -M -d \
+        /var/lib/${PROJECT} -s /usr/sbin/nologin -c "${PROJECT} user" \
+        ${PROJECT}; \
+    mkdir -p /etc/${PROJECT} /var/log/${PROJECT} /var/lib/${PROJECT} /var/cache/${PROJECT}; \
+    chown ${PROJECT}:${PROJECT} /etc/${PROJECT} /var/log/${PROJECT} /var/lib/${PROJECT} /var/cache/${PROJECT}
+
+RUN git clone ${PROJECT_REPO} /opt/${PROJECT}; \
+    cd /opt/${PROJECT}; \
+    git fetch ${PROJECT_REPO} ${PROJECT_REF}; \
+    git checkout FETCH_HEAD; \
+    cd -
+
+RUN python3 -m venv /var/lib/openstack
+RUN /var/lib/openstack/bin/pip install -c /wheels/upper-constraints.txt --find-links /wheels ${PIP_ARGS} /opt/${PROJECT} ${PIP_EXTRA_PACKAGES}
+RUN /var/lib/openstack/bin/pip install -c /wheels/upper-constraints.txt --find-links /wheels ${PIP_ARGS} -r /tmp/${PROJECT}/pypkglist.txt
+RUN zypper remove -y --clean-deps git; \
+    rm -rf /tmp/* /root/.cache /etc/machine-id /wheels /opt/${PROJECT} /var/lib/openstack/lib/python*/no-global-site-packages.txt; \
+    find /usr/ /var/ \( -name "*.pyc" -o -name "__pycache__" \) -delete
+
+WORKDIR /var/lib/openstack
