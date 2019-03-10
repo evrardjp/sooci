@@ -5,7 +5,7 @@ env:
   - PROJECT=keystone PROJECT_REF=stable/rocky
 script:
   - echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
-  - docker build --build-arg PROJECT=${PROJECT} --build-arg PROJECT_REF=${PROJECT_REF} -t evrardjp/loci-poc:${PROJECT}-${PROJECT_REF#*/} -f Dockerfile.opensuse_15 .
+  - docker build --build-arg PROJECT=${PROJECT} --build-arg PROJECT_REF=${PROJECT_REF} -t evrardjp/loci-poc:${PROJECT}-${PROJECT_REF#*/} -f Dockerfile.opensuse_15 --no-cache --force-rm .
   - docker push ${DOCKER_USERNAME}/loci-poc:${PROJECT}-${PROJECT_REF#*/}
 matrix:
   fast_finish: true
