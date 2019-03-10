@@ -1,0 +1,4 @@
+cryptography
+pymysql
+python-memcached
+uwsgi
