@@ -1,11 +1,15 @@
 services:
   - docker
 env:
-  - PROJECT=keystone PROJECT_REF=master
   - PROJECT=keystone PROJECT_REF=stable/rocky
+  - PROJECT=glance PROJECT_REF=stable/rocky
+  - PROJECT=cinder PROJECT_REF=stable/rocky
+  - PROJECT=nova PROJECT_REF=stable/rocky
+  - PROJECT=neutron PROJECT_REF=stable/rocky
+  - PROJECT=heat PROJECT_REF=stable/rocky
+  - PROJECT=horizon PROJECT_REF=stable/rocky
 script:
-  - echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
   - docker build --build-arg PROJECT=${PROJECT} --build-arg PROJECT_REF=${PROJECT_REF} -t evrardjp/loci-poc:${PROJECT}-${PROJECT_REF#*/} -f Dockerfile.opensuse_15 --no-cache --force-rm .
-  - docker push ${DOCKER_USERNAME}/loci-poc:${PROJECT}-${PROJECT_REF#*/}
+  - docker image list
 matrix:
   fast_finish: true
