@@ -1,2 +1,3 @@
 # Blacklist of things
-pycadf
+python-qpid-proton===0.14.0
+zVMCloudConnector===0.3.5
