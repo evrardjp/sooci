@@ -1,3 +1,12 @@
 # Blacklist of things
 python-qpid-proton===0.14.0
 zVMCloudConnector===0.3.5
+scipy
+scikit-learn
+pylxd
+# enum34 doesn't need backporting into py36
+enum34
+# A recent confluent-kafka cannot be built under openSUSE until librdkafka-devel is at v1.0.0 or later
+confluent-kafka
+# unittest2 doesn't build for python3.6. It is intended as a backport of new things into python2 and early python3, so not relevant
+unittest2

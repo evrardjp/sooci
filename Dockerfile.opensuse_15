@@ -30,6 +30,7 @@ COPY --from=requirementsbindepbuilder /bindeps/list-distropkg /list-distropkg
 COPY pip-package-blacklist.txt pip-package-extralist.txt /wheels/
 ADD ${UPPERCONSTRAINTS_URL} /wheels/upper-constraints.txt
 
+# Upgrade of pip is required to build wheel for python-dateutil==2.8.0
 RUN zypper install \
     --no-confirm \
     --auto-agree-with-licenses \
@@ -41,10 +42,11 @@ RUN zypper install \
     python3-wheel \
     python3-pip \
     $(cat /list-distropkg); \
-    rm -f /list-distropkg
+    rm -f /list-distropkg; \
+    pip install --upgrade pip
 
 RUN cat upper-constraints.txt pip-package-extralist.txt | grep -v -f pip-package-blacklist.txt > wheel-build-list.txt
-RUN cat wheel-build-list.txt | parallel "pip wheel --no-deps ${PIP_WHEEL_ARGS}"
+RUN cat wheel-build-list.txt | parallel "LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 LANGUAGE=en_US.UTF-8 pip wheel --no-binary :all: --no-deps ${PIP_WHEEL_ARGS}"
 
 ## Build project pkg list
 # keep same order as possible from requirementsbindepbuilder
