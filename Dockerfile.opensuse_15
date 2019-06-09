@@ -1,5 +1,5 @@
 ## Build requirements pkg list
-ARG FROM=opensuse/leap:15
+ARG FROM=opensuse/leap:15.0
 FROM ${FROM} as requirementsbindepbuilder
 
 ARG BINDEP_LOCATION=https://opendev.org/openstack/loci/raw/branch/master/bindep.txt
@@ -48,7 +48,7 @@ RUN cat wheel-build-list.txt | parallel "pip wheel --no-deps ${PIP_WHEEL_ARGS}"
 
 ## Build project pkg list
 # keep same order as possible from requirementsbindepbuilder
-ARG FROM=opensuse/leap:15
+ARG FROM=opensuse/leap:15.0
 FROM ${FROM} as projectbindepbuilder
 
 ARG PROJECT
@@ -66,7 +66,7 @@ RUN bindep -l csv ${PROJECT} ${PROFILES} python3 | sed 's/,/ /g' > list-distropk
 RUN bindep -f pydep.txt -l newline ${PROJECT} ${PROFILES} python3 > list-pypkg.txt
 
 ## Build project
-ARG FROM=opensuse/leap:15
+ARG FROM=opensuse/leap:15.0
 FROM ${FROM} as projectimage
 
 ENV PATH=/var/lib/openstack/bin:$PATH
