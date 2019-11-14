@@ -25,10 +25,11 @@ git clone ${PROJECT_REPO} /opt/${PROJECT}; cd /opt/${PROJECT}; \
 git fetch ${PROJECT_REPO} ${PROJECT_REF}; git checkout FETCH_HEAD; cd -
 
 python3 -m venv /var/lib/openstack
-/var/lib/openstack/bin/pip install \
+/var/lib/openstack/bin/pip install --no-binary :all: \
   -c /wheels/upper-constraints.txt --find-links /wheels \
   ${PIP_ARGS} \
   /opt/${PROJECT} ${PIP_EXTRA_PACKAGES} -r /tmp/${PROJECT}/list-pypkg.txt
+/var/lib/openstack/bin/pip freeze > /python-packages-versions.txt
 
 zypper remove -y --clean-deps git; \
 zypper clean -a ; \
